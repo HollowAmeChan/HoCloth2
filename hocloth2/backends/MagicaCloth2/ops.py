@@ -108,11 +108,38 @@ def _matrix_from_row_major(values) -> Matrix | None:
     )
 
 
-def _scene_delta_time(scene) -> float:
+def _scene_time_context(scene) -> dict:
     fps_base = float(scene.render.fps_base) if scene.render.fps_base else 1.0
-    fps = float(scene.render.fps) / fps_base if scene.render.fps else 24.0
-    return 1.0 / fps if fps > 0.0 else 1.0 / 24.0
+    fps = int(scene.render.fps) if scene.render.fps else 24
+    timeline_fps = float(fps) / fps_base if fps_base > 0.0 else float(fps)
+    if timeline_fps <= 0.0:
+        fps = 24
+        fps_base = 1.0
+        timeline_fps = 24.0
+    frame_index = int(scene.frame_current)
+    frame_subframe = float(getattr(scene, "frame_subframe", 0.0) or 0.0)
+    timeline_frame = float(frame_index) + frame_subframe
+    frame_origin = int(getattr(scene, "frame_start", 0))
+    frame_duration = 1.0 / timeline_fps
+    time_seconds = (timeline_frame - float(frame_origin)) * frame_duration
+    return {
+        "frame_index": frame_index,
+        "frame_subframe": frame_subframe,
+        "timeline_frame": timeline_frame,
+        "frame_origin": frame_origin,
+        "time_seconds": time_seconds,
+        "timeline_fps": timeline_fps,
+        "blender_fps": fps,
+        "blender_fps_base": fps_base,
+        "frame_duration_seconds": frame_duration,
+    }
 
+
+def _reset_step_time(scene) -> None:
+    if hasattr(scene, "hocloth2_mc2_last_time_seconds"):
+        scene.hocloth2_mc2_last_time_seconds = 0.0
+    if hasattr(scene, "hocloth2_mc2_has_last_time_seconds"):
+        scene.hocloth2_mc2_has_last_time_seconds = False
 
 def _store_build_response(scene, response: dict) -> tuple[int, str]:
     payload = response.get("payload", {}) if isinstance(response, dict) else {}
@@ -121,6 +148,7 @@ def _store_build_response(scene, response: dict) -> tuple[int, str]:
     if handle > 0:
         scene.hocloth2_mc2_runtime_handle = handle
         scene.hocloth2_mc2_step_index = 0
+        _reset_step_time(scene)
     return handle, summary
 
 
@@ -163,11 +191,33 @@ def _frame_inputs_from_snapshot(scene, authoring_snapshot: dict) -> dict:
                 }
             )
 
-    delta_time = _scene_delta_time(scene)
+    time_context = _scene_time_context(scene)
+    time_seconds = float(time_context["time_seconds"])
+    has_previous_time = bool(getattr(scene, "hocloth2_mc2_has_last_time_seconds", False))
+    previous_time_seconds = float(getattr(scene, "hocloth2_mc2_last_time_seconds", time_seconds))
+    delta_time_seconds = time_seconds - previous_time_seconds if has_previous_time else 0.0
+    time_discontinuity = not has_previous_time or delta_time_seconds < 0.0
+    if delta_time_seconds < 0.0:
+        delta_time_seconds = 0.0
+    if hasattr(scene, "hocloth2_mc2_last_time_seconds"):
+        scene.hocloth2_mc2_last_time_seconds = time_seconds
+    if hasattr(scene, "hocloth2_mc2_has_last_time_seconds"):
+        scene.hocloth2_mc2_has_last_time_seconds = True
+
     return {
-        "frame": int(scene.frame_current),
-        "time": float(scene.frame_current) * delta_time,
-        "delta_time": delta_time,
+        "frame": int(time_context["frame_index"]),
+        "frame_index": int(time_context["frame_index"]),
+        "frame_subframe": float(time_context["frame_subframe"]),
+        "timeline_frame": float(time_context["timeline_frame"]),
+        "frame_origin": int(time_context["frame_origin"]),
+        "time": time_seconds,
+        "time_seconds": time_seconds,
+        "delta_time": delta_time_seconds,
+        "delta_time_seconds": delta_time_seconds,
+        "time_discontinuity": bool(time_discontinuity),
+        "timeline_fps": float(time_context["timeline_fps"]),
+        "blender_fps": int(time_context["blender_fps"]),
+        "blender_fps_base": float(time_context["blender_fps_base"]),
         "time_contract": snapshot_payload.get("time_contract", snapshot.build_time_contract(scene)),
         "bone_transforms": transforms,
     }
@@ -238,6 +288,7 @@ class HOCLOTH2_MC2_OT_add_component(bpy.types.Operator):
             component.status = f"Authoring chain ready: {component.bone_count} bones"
             scene.hocloth2_mc2_runtime_handle = 0
             scene.hocloth2_mc2_step_index = 0
+            _reset_step_time(scene)
             scene.hocloth2_mc2_status = f"Added {display_name}"
             return {"FINISHED"}
 
@@ -252,6 +303,7 @@ class HOCLOTH2_MC2_OT_add_component(bpy.types.Operator):
         component.status = "Collider authoring ready"
         scene.hocloth2_mc2_runtime_handle = 0
         scene.hocloth2_mc2_step_index = 0
+        _reset_step_time(scene)
         scene.hocloth2_mc2_status = f"Added {display_name}"
         return {"FINISHED"}
 
@@ -273,6 +325,7 @@ class HOCLOTH2_MC2_OT_remove_component(bpy.types.Operator):
         scene.hocloth2_mc2_component_index = max(0, min(index, len(components) - 1))
         scene.hocloth2_mc2_runtime_handle = 0
         scene.hocloth2_mc2_step_index = 0
+        _reset_step_time(scene)
         scene.hocloth2_mc2_status = f"Removed {removed_name}"
         return {"FINISHED"}
 
@@ -304,6 +357,7 @@ class HOCLOTH2_MC2_OT_refresh_component(bpy.types.Operator):
         component.status = f"Refreshed chain: {component.bone_count} bones"
         scene.hocloth2_mc2_runtime_handle = 0
         scene.hocloth2_mc2_step_index = 0
+        _reset_step_time(scene)
         scene.hocloth2_mc2_status = component.status
         return {"FINISHED"}
 

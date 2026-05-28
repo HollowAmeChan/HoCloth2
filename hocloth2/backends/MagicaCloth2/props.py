@@ -87,11 +87,19 @@ def register() -> None:
     bpy.types.Scene.hocloth2_mc2_live_running = bpy.props.BoolProperty(name="MC2 Live", default=False)
     bpy.types.Scene.hocloth2_mc2_runtime_handle = bpy.props.IntProperty(name="MC2 Runtime Handle", default=0, min=0)
     bpy.types.Scene.hocloth2_mc2_step_index = bpy.props.IntProperty(name="MC2 Step Index", default=0, min=0)
-    bpy.types.Scene.hocloth2_mc2_simulation_substeps = bpy.props.IntProperty(
-        name="MC2 Substeps / Frame",
-        default=4,
+    bpy.types.Scene.hocloth2_mc2_last_time_seconds = bpy.props.FloatProperty(name="MC2 Last Time Seconds", default=0.0)
+    bpy.types.Scene.hocloth2_mc2_has_last_time_seconds = bpy.props.BoolProperty(name="MC2 Has Last Time Seconds", default=False)
+    bpy.types.Scene.hocloth2_mc2_unity_tick_rate = bpy.props.IntProperty(
+        name="Unity Ticks / Sec",
+        default=120,
         min=1,
-        max=5,
+        max=240,
+    )
+    bpy.types.Scene.hocloth2_mc2_simulation_frequency = bpy.props.IntProperty(
+        name="MC2 Steps / Sec",
+        default=120,
+        min=30,
+        max=150,
     )
     bpy.types.Scene.hocloth2_mc2_last_snapshot_path = bpy.props.StringProperty(
         name="Last Snapshot Path",
@@ -108,6 +116,10 @@ def unregister() -> None:
         "hocloth2_mc2_last_debug_json_path",
         "hocloth2_mc2_last_snapshot_path",
         "hocloth2_mc2_simulation_substeps",
+        "hocloth2_mc2_simulation_frequency",
+        "hocloth2_mc2_unity_tick_rate",
+        "hocloth2_mc2_has_last_time_seconds",
+        "hocloth2_mc2_last_time_seconds",
         "hocloth2_mc2_step_index",
         "hocloth2_mc2_runtime_handle",
         "hocloth2_mc2_live_running",

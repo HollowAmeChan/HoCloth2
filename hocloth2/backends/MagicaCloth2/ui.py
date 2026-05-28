@@ -55,20 +55,16 @@ def _draw_time_settings(layout, scene):
     box.label(text="Time", icon="TIME")
     fps = contract["blender_fps"]
     fps_base = contract["blender_fps_base"]
-    display_fps = contract["display_fps"]
-    box.label(text=f"Blender FPS: {display_fps:.3f} ({fps}/{fps_base:g})")
-    box.prop(scene, "hocloth2_mc2_simulation_substeps")
-    box.label(
-        text=(
-            f"MC2 step: {contract['mc2_simulation_frequency']} Hz / "
-            f"{contract['mc2_fixed_delta_time']:.5f}s"
-        )
-    )
-    box.label(text=f"Unity capture dt: {contract['unity_capture_delta_time']:.5f}s")
-    requested = int(round(contract["requested_simulation_frequency"]))
-    resolved = int(contract["mc2_simulation_frequency"])
-    if requested != resolved:
-        box.label(text=f"MC2 frequency clamped: requested {requested} Hz", icon="ERROR")
+    timeline_fps = contract["blender_timeline_fps"]
+    box.label(text=f"Timeline rate: {timeline_fps:.3f} frames/sec ({fps}/{fps_base:g})")
+    box.prop(scene, "hocloth2_mc2_unity_tick_rate")
+    box.prop(scene, "hocloth2_mc2_simulation_frequency")
+    box.label(text=f"Unity tick dt: {contract['unity_tick_delta_time']:.5f}s")
+    box.label(text=f"MC2 step dt: {contract['mc2_fixed_delta_time']:.5f}s")
+    box.label(text=f"Unity ticks / timeline frame: {contract['unity_ticks_per_timeline_frame']:.3f}")
+    box.label(text=f"MC2 steps / timeline frame: {contract['mc2_steps_per_timeline_frame']:.3f}")
+    if contract["mc2_steps_per_unity_tick"] > contract["mc2_max_simulation_count_per_frame"]:
+        box.label(text="MC2 max steps cannot cover Unity tick", icon="ERROR")
 
 def _draw_component_editor(layout, component):
     box = layout.box()

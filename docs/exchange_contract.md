@@ -41,7 +41,7 @@ payload: map
 - 大数组优先用 MessagePack `bin` 承载二进制 buffer，而不是膨胀成 JSON 风格 float array。
 - mesh/bake 仍然优先 Alembic，不进入主通信帧。
 - 骨骼 Transform 不能按普通 Unity Transform 理解，必须遵守 `bone_transform_contract.md`。
-- 时间推进必须遵守 `time_contract.md`：Blender 声明显示 FPS，Unity/MC2 应用固定模拟频率。
+- 时间推进必须遵守 `time_contract.md`：传输时间以 `time_seconds` 的现实秒为准，Blender 帧率只解释帧号，Unity tick rate 和 MC2 simulation frequency 是独立后端设置。
 
 ## Debug JSON
 

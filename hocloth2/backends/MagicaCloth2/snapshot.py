@@ -11,11 +11,14 @@ TRANSFORM_CONTRACT = "bone_transform_v1"
 AXIS_CONVERSION = "BLENDER_Z_UP_NEG_Y_FORWARD_TO_UNITY_Y_UP_POS_Z_FORWARD"
 MATRIX_CONVENTION = "row_major_column_vector"
 BONE_PRIMARY_AXIS = "blender_local_positive_y"
-TIME_CONTRACT = "mc2_time_v1"
+TIME_CONTRACT = "mc2_time_v3"
 MC2_SIMULATION_FREQUENCY_LOW = 30
 MC2_SIMULATION_FREQUENCY_HIGH = 150
 MC2_MAX_SIMULATION_COUNT_PER_FRAME = 5
-MC2_DEFAULT_SIMULATION_SUBSTEPS_PER_FRAME = 4
+UNITY_TICK_RATE_LOW = 1
+UNITY_TICK_RATE_HIGH = 240
+DEFAULT_UNITY_TICK_RATE = 120
+DEFAULT_MC2_SIMULATION_FREQUENCY = 120
 MC2_BONE_ATTRIBUTE_PROPERTY_ALIASES = (
     "hocloth_mc2_attribute",
     "mc2_attribute",
@@ -55,6 +58,8 @@ def _curve(value: float, use_curve: bool = False) -> dict:
         "useCurve": bool(use_curve),
         "samples": [sample] * 16,
     }
+
+
 def _scene_display_fps(scene) -> tuple[int, float, float]:
     fps_base = float(scene.render.fps_base) if scene.render.fps_base else 1.0
     fps = int(scene.render.fps) if scene.render.fps else 24
@@ -67,35 +72,53 @@ def _scene_display_fps(scene) -> tuple[int, float, float]:
 
 
 def build_time_contract(scene) -> dict:
-    fps, fps_base, display_fps = _scene_display_fps(scene)
-    frame_delta = 1.0 / display_fps
-    substeps = int(getattr(scene, "hocloth2_mc2_simulation_substeps", MC2_DEFAULT_SIMULATION_SUBSTEPS_PER_FRAME))
-    substeps = max(1, min(MC2_MAX_SIMULATION_COUNT_PER_FRAME, substeps))
-    requested_frequency = display_fps * float(substeps)
-    simulation_frequency = int(round(requested_frequency))
+    fps, fps_base, timeline_fps = _scene_display_fps(scene)
+    frame_duration = 1.0 / timeline_fps
+
+    unity_tick_rate = int(getattr(scene, "hocloth2_mc2_unity_tick_rate", DEFAULT_UNITY_TICK_RATE))
+    unity_tick_rate = max(UNITY_TICK_RATE_LOW, min(UNITY_TICK_RATE_HIGH, unity_tick_rate))
+    unity_tick_delta = 1.0 / float(unity_tick_rate)
+
+    simulation_frequency = int(
+        getattr(scene, "hocloth2_mc2_simulation_frequency", DEFAULT_MC2_SIMULATION_FREQUENCY)
+    )
     simulation_frequency = max(MC2_SIMULATION_FREQUENCY_LOW, min(MC2_SIMULATION_FREQUENCY_HIGH, simulation_frequency))
     fixed_delta = 1.0 / float(simulation_frequency)
-    effective_substeps = float(simulation_frequency) / display_fps
-    max_count = max(1, min(MC2_MAX_SIMULATION_COUNT_PER_FRAME, int(math.ceil(effective_substeps - 1.0e-6))))
+
+    mc2_steps_per_unity_tick = float(simulation_frequency) / float(unity_tick_rate)
+    mc2_steps_per_timeline_frame = float(simulation_frequency) / timeline_fps
+    unity_ticks_per_timeline_frame = float(unity_tick_rate) / timeline_fps
+    max_count = max(1, min(MC2_MAX_SIMULATION_COUNT_PER_FRAME, int(math.ceil(mc2_steps_per_unity_tick - 1.0e-6))))
+
     return {
         "contract": TIME_CONTRACT,
-        "time_source": "blender_scene_fps",
+        "time_unit": "seconds",
+        "time_basis": "real_time_seconds",
+        "time_source": "frame_inputs.time_seconds",
+        "timeline_source": "blender_scene",
         "blender_fps": int(fps),
         "blender_fps_base": float(fps_base),
-        "display_fps": float(display_fps),
-        "display_frame_delta_time": float(frame_delta),
-        "requested_substeps_per_frame": int(substeps),
-        "requested_simulation_frequency": float(requested_frequency),
+        "blender_timeline_fps": float(timeline_fps),
+        "blender_frame_duration_seconds": float(frame_duration),
+        "unity_tick_rate": int(unity_tick_rate),
+        "unity_tick_delta_time": float(unity_tick_delta),
+        "unity_time_mode": "capture_delta_time",
+        "unity_capture_delta_time": float(unity_tick_delta),
+        "unity_target_frame_rate": int(unity_tick_rate),
         "mc2_simulation_frequency": int(simulation_frequency),
         "mc2_fixed_delta_time": float(fixed_delta),
         "mc2_max_simulation_count_per_frame": int(max_count),
-        "effective_substeps_per_frame": float(effective_substeps),
-        "unity_time_mode": "capture_delta_time",
-        "unity_capture_delta_time": float(frame_delta),
-        "unity_target_frame_rate": max(1, int(round(display_fps))),
+        "unity_ticks_per_timeline_frame": float(unity_ticks_per_timeline_frame),
+        "mc2_steps_per_timeline_frame": float(mc2_steps_per_timeline_frame),
+        "mc2_steps_per_unity_tick": float(mc2_steps_per_unity_tick),
+        "blender_sample_rate": float(timeline_fps),
+        "blender_frame_delta_time": float(frame_duration),
+        "display_fps": float(timeline_fps),
+        "display_frame_delta_time": float(frame_duration),
+        "unity_ticks_per_blender_frame": float(unity_ticks_per_timeline_frame),
+        "mc2_steps_per_blender_frame": float(mc2_steps_per_timeline_frame),
+        "effective_substeps_per_frame": float(mc2_steps_per_timeline_frame),
     }
-
-
 
 def _normalize_bone_attribute(value) -> str | None:
     if value is None:
