@@ -1,6 +1,8 @@
-﻿import bpy
+﻿import json
 
-from . import props
+import bpy
+
+from . import props, snapshot
 from .extract import extract_active_bone_chain
 
 
@@ -12,9 +14,21 @@ _COMPONENT_LABELS = {
     "PLANE_COLLIDER": "MagicaCloth2 Plane Collider",
 }
 
+SNAPSHOT_TEXT_NAME = "HoCloth2_MC2_AuthoringSnapshot.json"
+
 
 def _active_component(scene):
     return props.get_active_component(scene)
+
+
+def _write_snapshot_text(scene, envelope: dict) -> str:
+    text = bpy.data.texts.get(SNAPSHOT_TEXT_NAME)
+    if text is None:
+        text = bpy.data.texts.new(SNAPSHOT_TEXT_NAME)
+    text.clear()
+    text.write(json.dumps(envelope, ensure_ascii=False, indent=2))
+    scene.hocloth2_mc2_last_snapshot_text_name = text.name
+    return text.name
 
 
 class HOCLOTH2_MC2_OT_add_component(bpy.types.Operator):
@@ -110,6 +124,23 @@ class HOCLOTH2_MC2_OT_refresh_component(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class HOCLOTH2_MC2_OT_export_snapshot(bpy.types.Operator):
+    bl_idname = "hocloth2.mc2_export_snapshot"
+    bl_label = "Export MC2 Snapshot"
+    bl_description = "Write the current Magica Cloth 2 authoring snapshot to a Blender text datablock"
+
+    def execute(self, context):
+        envelope = snapshot.build_authoring_snapshot(context.scene)
+        payload = envelope.get("payload", {})
+        text_name = _write_snapshot_text(context.scene, envelope)
+        context.scene.hocloth2_mc2_status = (
+            f"Snapshot exported: {len(payload.get('bone_chains', []))} chains, "
+            f"{len(payload.get('colliders', []))} colliders"
+        )
+        self.report({"INFO"}, f"Wrote {text_name}")
+        return {"FINISHED"}
+
+
 class HOCLOTH2_MC2_OT_build(bpy.types.Operator):
     bl_idname = "hocloth2.mc2_build"
     bl_label = "Build MC2 Runtime"
@@ -117,21 +148,25 @@ class HOCLOTH2_MC2_OT_build(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        components = [component for component in scene.hocloth2_mc2_components if component.enabled]
-        bone_components = [component for component in components if component.component_type in props.BONE_COMPONENT_TYPES]
-        collider_components = [component for component in components if component.component_type in props.COLLIDER_COMPONENT_TYPES]
-        bone_count = sum(component.bone_count for component in bone_components)
+        envelope = snapshot.build_authoring_snapshot(scene)
+        payload = envelope.get("payload", {})
+        bone_chains = payload.get("bone_chains", [])
+        collider_count = len(payload.get("colliders", []))
+        bone_count = sum(len(chain.get("bones", [])) for chain in bone_chains)
+        _write_snapshot_text(scene, envelope)
 
-        if not bone_components:
+        if not bone_chains:
             scene.hocloth2_mc2_status = "Build blocked: no enabled BoneCloth/BoneSpring component"
+            self.report({"ERROR"}, scene.hocloth2_mc2_status)
+            return {"CANCELLED"}
+        if bone_count <= 0:
+            scene.hocloth2_mc2_status = "Build blocked: enabled MC2 chains resolved 0 bones"
             self.report({"ERROR"}, scene.hocloth2_mc2_status)
             return {"CANCELLED"}
 
         scene.hocloth2_mc2_status = (
-            "Build placeholder: "
-            f"{len(bone_components)} bone components, "
-            f"{len(collider_components)} colliders, "
-            f"{bone_count} bones"
+            "Build placeholder snapshot ready: "
+            f"{len(bone_chains)} chains, {collider_count} colliders, {bone_count} bones"
         )
         self.report({"INFO"}, "MC2 Unity bridge is not implemented yet.")
         return {"FINISHED"}
@@ -168,6 +203,7 @@ CLASSES = (
     HOCLOTH2_MC2_OT_add_component,
     HOCLOTH2_MC2_OT_remove_component,
     HOCLOTH2_MC2_OT_refresh_component,
+    HOCLOTH2_MC2_OT_export_snapshot,
     HOCLOTH2_MC2_OT_build,
     HOCLOTH2_MC2_OT_step,
     HOCLOTH2_MC2_OT_toggle_live,

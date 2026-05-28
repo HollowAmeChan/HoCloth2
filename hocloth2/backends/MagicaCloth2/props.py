@@ -15,12 +15,25 @@ BONE_COMPONENT_TYPES = {"BONE_CLOTH", "BONE_SPRING"}
 COLLIDER_COMPONENT_TYPES = {"SPHERE_COLLIDER", "CAPSULE_COLLIDER", "PLANE_COLLIDER"}
 
 
+CONNECTION_MODE_ITEMS = (
+    ("Automatic", "Automatic", "Use MC2 automatic bone connection"),
+    ("Line", "Line", "Use line connection"),
+    ("Mesh", "Mesh", "Use mesh connection when this backend supports it"),
+)
+
+
 def _poll_armature_object(_self, obj):
     return obj is not None and obj.type == "ARMATURE"
 
 
 def generate_component_id() -> str:
     return uuid.uuid4().hex
+
+
+def ensure_component_id(component) -> str:
+    if not component.component_id:
+        component.component_id = generate_component_id()
+    return component.component_id
 
 
 class HOCLOTH2_MC2_Component(bpy.types.PropertyGroup):
@@ -40,9 +53,19 @@ class HOCLOTH2_MC2_Component(bpy.types.PropertyGroup):
     )
     root_bone_name: bpy.props.StringProperty(name="Root Bone")
     bone_count: bpy.props.IntProperty(name="Bones", default=0, min=0)
-    source_object: bpy.props.PointerProperty(name="Object", type=bpy.types.Object)
+    connection_mode: bpy.props.EnumProperty(
+        name="Connection",
+        items=CONNECTION_MODE_ITEMS,
+        default="Automatic",
+    )
     radius: bpy.props.FloatProperty(name="Radius", default=0.05, min=0.0, soft_max=1.0)
+    gravity_strength: bpy.props.FloatProperty(name="Gravity", default=9.81, min=0.0, soft_max=20.0)
+    damping: bpy.props.FloatProperty(name="Damping", default=0.10, min=0.0, max=1.0)
+    stiffness: bpy.props.FloatProperty(name="Stiffness", default=0.60, min=0.0, soft_max=2.0)
+    drag: bpy.props.FloatProperty(name="Drag", default=0.40, min=0.0, max=1.0)
+    source_object: bpy.props.PointerProperty(name="Object", type=bpy.types.Object)
     length: bpy.props.FloatProperty(name="Length", default=0.2, min=0.0, soft_max=2.0)
+    collider_friction: bpy.props.FloatProperty(name="Friction", default=0.05, min=0.0, max=1.0)
     status: bpy.props.StringProperty(name="Status", default="Not built")
 
 
@@ -63,10 +86,15 @@ def register() -> None:
     )
     bpy.types.Scene.hocloth2_mc2_status = bpy.props.StringProperty(name="MC2 Status", default="Idle")
     bpy.types.Scene.hocloth2_mc2_live_running = bpy.props.BoolProperty(name="MC2 Live", default=False)
+    bpy.types.Scene.hocloth2_mc2_last_snapshot_text_name = bpy.props.StringProperty(
+        name="Last Snapshot Text",
+        default="",
+    )
 
 
 def unregister() -> None:
     for attr_name in (
+        "hocloth2_mc2_last_snapshot_text_name",
         "hocloth2_mc2_live_running",
         "hocloth2_mc2_status",
         "hocloth2_mc2_component_index",

@@ -67,12 +67,21 @@ def _draw_component_editor(layout, component):
         box.prop(component, "armature_object")
         box.prop(component, "root_bone_name")
         box.prop(component, "bone_count")
+        box.prop(component, "connection_mode")
         box.operator("hocloth2.mc2_refresh_component", text="Refresh From Active Bone", icon="FILE_REFRESH")
+
+        params = box.column(align=True)
+        params.prop(component, "radius")
+        params.prop(component, "gravity_strength")
+        params.prop(component, "damping")
+        params.prop(component, "stiffness")
+        params.prop(component, "drag")
     else:
         box.prop(component, "source_object")
         box.prop(component, "radius")
         if component.component_type == "CAPSULE_COLLIDER":
             box.prop(component, "length")
+        box.prop(component, "collider_friction")
 
     box.label(text=component.status or "Idle", icon="INFO")
 
@@ -112,6 +121,9 @@ def draw_panel(context: bpy.types.Context, layout: bpy.types.UILayout) -> None:
         text="Pause" if scene.hocloth2_mc2_live_running else "Live",
         icon="PAUSE" if scene.hocloth2_mc2_live_running else "PLAY",
     )
+    runtime.operator("hocloth2.mc2_export_snapshot", text="Snapshot", icon="TEXT")
+    if scene.hocloth2_mc2_last_snapshot_text_name:
+        runtime.label(text=scene.hocloth2_mc2_last_snapshot_text_name, icon="TEXT")
     runtime.label(text=scene.hocloth2_mc2_status or "Idle", icon="INFO")
 
 
