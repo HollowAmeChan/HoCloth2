@@ -132,17 +132,17 @@ Unity MC2 adapter 在 build 时执行：
 5. 创建 MagicaCloth 并 BuildAndRun。
 ```
 
-Unity MC2 adapter 在 step 时执行：
+Unity MC2 adapter 在 step 时执行连续读取语义：
 
 ```text
-1. 读取 pose_parent_local_matrix_b 或 pose_world_matrix_b。
-2. 转换到 Unity solver 空间。
-3. 写入 mirror Transform hierarchy，作为动画输入。
-4. 等 MC2 更新后读取 solver Transform。
-5. 转回 Blender 空间作为 step_output。
+1. 先读取当前 solver/mirror Transform。
+2. 转回 Blender 空间作为本次 step_output。
+3. 再读取本次 pose_parent_local_matrix_b 或 pose_world_matrix_b。
+4. 转换到 Unity solver 空间。
+5. 写入 mirror Transform hierarchy，作为后续 Unity PlayerLoop/MC2 更新的动画输入。
 ```
 
-第一版可以先返回当前 solver Transform 的转换结果，但返回字段必须仍然标明它是 Blender 空间输出。
+也就是说，`step_request(N)` 立即返回当前可读状态，并提交第 N 帧输入；`step_request(N+1)` 读到的才是第 N 帧输入经过 Unity/MC2 后续 tick 推进后的状态。这更贴近后面连续模拟、连续读取的工作方式。
 
 ## Step Output 字段
 

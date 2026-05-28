@@ -1,6 +1,6 @@
 import bpy
 
-from . import props
+from . import props, snapshot
 
 
 _COMPONENT_ICONS = {
@@ -48,6 +48,27 @@ def _draw_add_buttons(layout):
     op = row.operator("hocloth2.mc2_add_component", text="Plane", icon="MESH_PLANE")
     op.component_type = "PLANE_COLLIDER"
 
+
+def _draw_time_settings(layout, scene):
+    contract = snapshot.build_time_contract(scene)
+    box = layout.box()
+    box.label(text="Time", icon="TIME")
+    fps = contract["blender_fps"]
+    fps_base = contract["blender_fps_base"]
+    display_fps = contract["display_fps"]
+    box.label(text=f"Blender FPS: {display_fps:.3f} ({fps}/{fps_base:g})")
+    box.prop(scene, "hocloth2_mc2_simulation_substeps")
+    box.label(
+        text=(
+            f"MC2 step: {contract['mc2_simulation_frequency']} Hz / "
+            f"{contract['mc2_fixed_delta_time']:.5f}s"
+        )
+    )
+    box.label(text=f"Unity capture dt: {contract['unity_capture_delta_time']:.5f}s")
+    requested = int(round(contract["requested_simulation_frequency"]))
+    resolved = int(contract["mc2_simulation_frequency"])
+    if requested != resolved:
+        box.label(text=f"MC2 frequency clamped: requested {requested} Hz", icon="ERROR")
 
 def _draw_component_editor(layout, component):
     box = layout.box()
@@ -116,6 +137,8 @@ def draw_panel(context: bpy.types.Context, layout: bpy.types.UILayout) -> None:
             _draw_component_editor(layout, component)
     else:
         layout.label(text="Select an armature bone or collider object, then add a component.", icon="INFO")
+
+    _draw_time_settings(layout, scene)
 
     runtime = layout.box()
     runtime.label(text="Runtime", icon="MODIFIER")

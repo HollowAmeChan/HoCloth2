@@ -168,6 +168,7 @@ def _frame_inputs_from_snapshot(scene, authoring_snapshot: dict) -> dict:
         "frame": int(scene.frame_current),
         "time": float(scene.frame_current) * delta_time,
         "delta_time": delta_time,
+        "time_contract": snapshot_payload.get("time_contract", snapshot.build_time_contract(scene)),
         "bone_transforms": transforms,
     }
 

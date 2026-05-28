@@ -41,6 +41,7 @@ payload: map
 - 大数组优先用 MessagePack `bin` 承载二进制 buffer，而不是膨胀成 JSON 风格 float array。
 - mesh/bake 仍然优先 Alembic，不进入主通信帧。
 - 骨骼 Transform 不能按普通 Unity Transform 理解，必须遵守 `bone_transform_contract.md`。
+- 时间推进必须遵守 `time_contract.md`：Blender 声明显示 FPS，Unity/MC2 应用固定模拟频率。
 
 ## Debug JSON
 
@@ -126,6 +127,11 @@ payload.handle: int
 payload.step_index: int
 payload.received_bone_count: int
 payload.solved_bone_count: int
+payload.sample_phase: before_input_apply
+payload.started_mc2_build_count: int
+payload.completed_mc2_build_count: int
+payload.failed_mc2_build_count: int
+payload.pending_mc2_build_count: int
 payload.bone_transforms[]:
   component_id: string
   armature_name: string
@@ -139,7 +145,7 @@ payload.bone_transforms[]:
 
 兼容字段 `world_matrix/world_translation/world_rotation/world_scale` 暂时仍会返回，它们等同于对应的 Blender 空间输出。
 
-当前第一版 `step_output` 先允许 debug 写回，目的是验证 Blender -> Unity -> Blender 的运行时数据闭环。真正接入 MC2 时必须遵守 `bone_transform_contract.md` 中的 solver 空间转换和写回策略。
+当前第一版 `step_output` 采用连续读取语义：每次 step 先返回当前可读输出，再提交本次输入给后续 Unity/MC2 tick 使用。返回 payload 会带 `sample_phase: before_input_apply`。真正接入 MC2 时必须遵守 `bone_transform_contract.md` 中的 solver 空间转换和写回策略。
 
 ## 其他 backend
 

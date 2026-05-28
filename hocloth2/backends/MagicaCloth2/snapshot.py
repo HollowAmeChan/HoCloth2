@@ -1,3 +1,5 @@
+import math
+
 from mathutils import Vector
 
 from ...common.exchange import wrap_authoring_snapshot
@@ -9,6 +11,11 @@ TRANSFORM_CONTRACT = "bone_transform_v1"
 AXIS_CONVERSION = "BLENDER_Z_UP_NEG_Y_FORWARD_TO_UNITY_Y_UP_POS_Z_FORWARD"
 MATRIX_CONVENTION = "row_major_column_vector"
 BONE_PRIMARY_AXIS = "blender_local_positive_y"
+TIME_CONTRACT = "mc2_time_v1"
+MC2_SIMULATION_FREQUENCY_LOW = 30
+MC2_SIMULATION_FREQUENCY_HIGH = 150
+MC2_MAX_SIMULATION_COUNT_PER_FRAME = 5
+MC2_DEFAULT_SIMULATION_SUBSTEPS_PER_FRAME = 4
 MC2_BONE_ATTRIBUTE_PROPERTY_ALIASES = (
     "hocloth_mc2_attribute",
     "mc2_attribute",
@@ -48,6 +55,46 @@ def _curve(value: float, use_curve: bool = False) -> dict:
         "useCurve": bool(use_curve),
         "samples": [sample] * 16,
     }
+def _scene_display_fps(scene) -> tuple[int, float, float]:
+    fps_base = float(scene.render.fps_base) if scene.render.fps_base else 1.0
+    fps = int(scene.render.fps) if scene.render.fps else 24
+    display_fps = float(fps) / fps_base if fps_base > 0.0 else float(fps)
+    if display_fps <= 0.0:
+        fps = 24
+        fps_base = 1.0
+        display_fps = 24.0
+    return fps, fps_base, display_fps
+
+
+def build_time_contract(scene) -> dict:
+    fps, fps_base, display_fps = _scene_display_fps(scene)
+    frame_delta = 1.0 / display_fps
+    substeps = int(getattr(scene, "hocloth2_mc2_simulation_substeps", MC2_DEFAULT_SIMULATION_SUBSTEPS_PER_FRAME))
+    substeps = max(1, min(MC2_MAX_SIMULATION_COUNT_PER_FRAME, substeps))
+    requested_frequency = display_fps * float(substeps)
+    simulation_frequency = int(round(requested_frequency))
+    simulation_frequency = max(MC2_SIMULATION_FREQUENCY_LOW, min(MC2_SIMULATION_FREQUENCY_HIGH, simulation_frequency))
+    fixed_delta = 1.0 / float(simulation_frequency)
+    effective_substeps = float(simulation_frequency) / display_fps
+    max_count = max(1, min(MC2_MAX_SIMULATION_COUNT_PER_FRAME, int(math.ceil(effective_substeps - 1.0e-6))))
+    return {
+        "contract": TIME_CONTRACT,
+        "time_source": "blender_scene_fps",
+        "blender_fps": int(fps),
+        "blender_fps_base": float(fps_base),
+        "display_fps": float(display_fps),
+        "display_frame_delta_time": float(frame_delta),
+        "requested_substeps_per_frame": int(substeps),
+        "requested_simulation_frequency": float(requested_frequency),
+        "mc2_simulation_frequency": int(simulation_frequency),
+        "mc2_fixed_delta_time": float(fixed_delta),
+        "mc2_max_simulation_count_per_frame": int(max_count),
+        "effective_substeps_per_frame": float(effective_substeps),
+        "unity_time_mode": "capture_delta_time",
+        "unity_capture_delta_time": float(frame_delta),
+        "unity_target_frame_rate": max(1, int(round(display_fps))),
+    }
+
 
 
 def _normalize_bone_attribute(value) -> str | None:
@@ -308,6 +355,7 @@ def build_authoring_snapshot(scene) -> dict:
         "axis_conversion": AXIS_CONVERSION,
         "matrix_convention": MATRIX_CONVENTION,
         "bone_primary_axis": BONE_PRIMARY_AXIS,
+        "time_contract": build_time_contract(scene),
         "components": [],
         "bone_chains": [],
         "colliders": [],
