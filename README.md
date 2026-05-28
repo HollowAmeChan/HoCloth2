@@ -9,7 +9,7 @@ HoCloth2 是一个 Blender 插件目录，用来和外部 Unity 物理宿主交�
 - HoCloth2 当前目录本身就是 Blender 可读取的裸插件目录。
 - 每个 backend 自己维护完整实现：属性、UI、导出、运行时、写回、collider、bake。
 - `common/` 只放真正会被多个 backend 复用的小工具。
-- Unity host 是一个外部程序，插件通过 bridge 调用它。
+- Unity engine 是一个外部程序，插件通过 MessagePack/TCP 调用它。
 - GitHub 自动发布先搁置，等第一版原型跑通后再做。
 
 ## 当前目录
@@ -18,6 +18,8 @@ HoCloth2 是一个 Blender 插件目录，用来和外部 Unity 物理宿主交�
 HoCloth2/
   __init__.py
   README.md
+  _Lib/
+  engine/
   hocloth2/
     common/
     backends/
@@ -25,9 +27,6 @@ HoCloth2/
       VRM/
       DynamicBone/
       Physbones/
-  bundled/
-    unity_host/
-      windows-x64/
   docs/
   tools/
   tests/
@@ -35,12 +34,10 @@ HoCloth2/
 
 ## 第一阶段
 
-第一阶段只做：
-
 ```text
 Blender MagicaCloth2 backend
   -> export MC2 authoring snapshot
-  -> Unity host MC2 adapter build
+  -> Unity engine MC2 adapter build
   -> send frame inputs
   -> receive solved bone transforms
   -> Blender pose apply
@@ -58,9 +55,9 @@ MeshCloth、Alembic、VRM SpringBone、DynamicBone、PhysBone 都后置。
 HoCloth2-<version>.zip
   HoCloth2/
     __init__.py
+    _Lib/
+    engine/
     hocloth2/
-    bundled/unity_host/windows-x64/
 ```
 
-Unity 后端由 `D:\Unity_Project\HoClothUnity` build 后复制到 `bundled/unity_host/windows-x64`。
-
+Unity 后端由 `D:\Unity_Project\HoClothUnity` build 后复制到 `engine/`。

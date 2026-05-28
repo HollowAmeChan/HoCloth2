@@ -8,12 +8,29 @@
 HoCloth2/
   __init__.py
   README.md
+  _Lib/
+  engine/
   hocloth2/
-  bundled/
   docs/
   tools/
   tests/
 ```
+
+## `engine/`
+
+```text
+engine/
+  HoClothUnity.exe
+  HoClothUnity_Data/
+  MonoBleedingEdge/
+  UnityPlayer.dll
+  UnityCrashHandler64.exe
+  version.json
+```
+
+这里直接放 Unity Player build 后的可运行文件。裸插件目录和发布 zip 都通过 `engine/` 找到 Unity 后端。
+
+不要把 Unity 工程源码放进这里。
 
 ## `hocloth2/`
 
@@ -32,9 +49,8 @@ hocloth2/
 只放明确复用的小东西：
 
 - addon 路径定位。
-- 简单日志。
 - MessagePack/envelope 小工具。
-- Unity host 启动/连接的基础 helper。
+- Unity engine 启动/连接的基础 helper。
 - 坐标/矩阵的最小通用函数。
 
 不要在这里做通用 component、通用 collider、通用 solver schema。
@@ -43,36 +59,17 @@ hocloth2/
 
 每个 backend 自己是一套完整插件子系统。
 
-一个 backend 可以自己放这些文件：
-
 ```text
 backends/MagicaCloth2/
   __init__.py
   props.py
   ui.py
-  operators.py
+  ops.py
   snapshot.py
-  inputs.py
-  bridge.py
-  apply.py
-  colliders.py
-  bake.py
-  presets.py
+  extract.py
 ```
 
-这些文件不是一开始都要建。需要哪个建哪个。
-
-backend 自己拥有：
-
-- Blender PropertyGroup。
-- UI 面板。
-- Operators。
-- Authoring snapshot。
-- Frame inputs。
-- Runtime bridge。
-- Pose 写回。
-- Collider 映射。
-- Bake/export。
+后续需要 frame inputs、bridge、apply、colliders、bake、presets 时，再按 backend 自己的需要添加。
 
 ## 为什么不做通用 component
 
@@ -81,19 +78,7 @@ MC2、VRM SpringBone、DynamicBone、PhysBone 的参数模型和运行时语义�
 - 抽象过薄，最后各 backend 还是绕过去。
 - 抽象过厚，后续每个 backend 都被迫适配一个不自然的模型。
 
-所以 HoCloth2 只统一外围：插件目录、Unity host 查找、打包、最小消息 envelope。业务模型由 backend 自己维护。
-
-## `bundled/`
-
-```text
-bundled/
-  unity_host/
-    windows-x64/
-```
-
-这里放 Unity Player build 后的可运行文件。它让裸插件目录和发布 zip 都能用相同相对路径找到 Unity 后端。
-
-不要把 Unity 工程源码放进这里。
+所以 HoCloth2 只统一外围：插件目录、Unity engine 查找、打包、最小消息 envelope。业务模型由 backend 自己维护。
 
 ## `tools/`
 
@@ -101,15 +86,14 @@ bundled/
 
 ```text
 tools/
-  sync_unity_host.ps1
+  sync_engine.ps1
   package_addon.ps1
 ```
 
-`sync_unity_host.ps1` 从 Unity build 输出复制文件到 `bundled/unity_host/windows-x64`。
+`sync_engine.ps1` 从 Unity build 输出复制文件到 `engine/`。
 
 `package_addon.ps1` 生成 Blender 可安装的 zip。
 
 ## `docs/`
 
 只保留能指导实现的文档，不堆过度设计。
-

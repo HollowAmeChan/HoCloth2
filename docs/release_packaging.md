@@ -21,21 +21,22 @@ D:\Unity_Project\HoClothUnity
 Unity 打包后，复制到：
 
 ```text
-HoCloth2\bundled\unity_host\windows-x64
+HoCloth2\engine
 ```
 
 未来脚本：
 
 ```text
-tools/sync_unity_host.ps1
+tools/sync_engine.ps1
 ```
 
 职责：
 
 - 检查 Unity build 输出。
-- 清空 bundled 目标目录。
+- 清空 `engine/` 目标目录。
 - 复制 exe、Data 目录、UnityPlayer.dll、依赖 dll、version.json。
 - 不复制 Unity 工程源码。
+- 不复制 PDB/MDB、DoNotShip、D3D12 等调试或冗余发布内容。
 
 ## Blender 插件 zip
 
@@ -56,8 +57,9 @@ zip 内部：
 ```text
 HoCloth2/
   __init__.py
+  _Lib/
+  engine/
   hocloth2/
-  bundled/unity_host/windows-x64/
 ```
 
 ## GitHub Release
@@ -69,4 +71,3 @@ tag v* -> build/package -> upload HoCloth2-<version>.zip
 ```
 
 Unity/MC2 授权和 CI 环境可能麻烦，后面再决定是否用自托管 runner。
-

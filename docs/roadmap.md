@@ -3,7 +3,7 @@
 ## Stage 0: 仓库形态
 
 - 创建干净 HoCloth2 仓库。
-- 简化为 `common/ + backends/ + bundled/`。
+- 简化为 `common/ + backends/ + engine/`。
 - 明确不做通用 component。
 - 旧 HoCloth 只作为参考。
 
@@ -12,19 +12,19 @@
 - 添加 `__init__.py`。
 - 添加基础注册/注销。
 - 添加一个 HoCloth2 面板入口。
-- 添加 common 路径和日志工具。
+- 添加 common 路径和 host helper。
 
 ## Stage 2: MagicaCloth2 backend 原型
 
-- 在 `backends/MagicaCloth2/` 里添加 props/ui/operators。
+- 在 `backends/MagicaCloth2/` 里添加 props/ui/ops。
 - 导出 MC2 authoring snapshot。
 - 导出 MC2 frame inputs。
 - 写 MC2 pose apply。
 
-## Stage 3: Unity Host MC2 原型
+## Stage 3: Unity Engine MC2 原型
 
-- Unity host 启动服务。
-- 接收 backend=`MagicaCloth2` 的消息。
+- Unity engine 启动 TCP 服务。
+- 接收 backend=`MagicaCloth2` 的 MessagePack 消息。
 - 构建 MC2 BoneCloth/BoneSpring。
 - Step 后返回 solved bone transforms。
 
@@ -36,7 +36,7 @@
 
 ## Stage 5: 本地打包
 
-- 写 `tools/sync_unity_host.ps1`。
+- 写 `tools/sync_engine.ps1`。
 - 写 `tools/package_addon.ps1`。
 - 生成 Blender 可安装 zip。
 
@@ -49,4 +49,3 @@
 ## Stage 7: GitHub Release
 
 - 第一版原型跑通后再做自动 release。
-

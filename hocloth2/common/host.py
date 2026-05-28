@@ -1,17 +1,21 @@
-﻿import subprocess
+import socket
+import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .exchange import read_frame, write_frame
+from .exchange import make_envelope, read_frame, write_frame
 
 
-HOST_RELATIVE_DIR = Path("bundled") / "unity_host" / "windows-x64"
+HOST_RELATIVE_DIR = Path("engine")
 HOST_EXE_CANDIDATES = (
     "HoClothUnity.exe",
     "HoCloth2Unity.exe",
     "HoClothUnityHost.exe",
 )
+HOST_TCP_HOST = "127.0.0.1"
+HOST_TCP_PORT = 39277
 
 _process: subprocess.Popen | None = None
 
@@ -25,7 +29,7 @@ class HostPaths:
 
 @dataclass(frozen=True)
 class HostStatus:
-    bundled: bool
+    engine_available: bool
     running: bool
     host_dir: str
     executable: str
@@ -52,7 +56,7 @@ def resolve_host_paths() -> HostPaths:
     return HostPaths(root, host_dir, executable)
 
 
-def is_running() -> bool:
+def is_process_running() -> bool:
     global _process
     if _process is None:
         return False
@@ -62,43 +66,63 @@ def is_running() -> bool:
     return True
 
 
+def can_connect(timeout: float = 0.2) -> bool:
+    try:
+        with socket.create_connection((HOST_TCP_HOST, HOST_TCP_PORT), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def wait_until_ready(timeout_seconds: float = 10.0) -> bool:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if can_connect(timeout=0.2):
+            return True
+        time.sleep(0.1)
+    return can_connect(timeout=0.2)
+
+
 def status() -> HostStatus:
     paths = resolve_host_paths()
-    running = is_running()
-    bundled = paths.executable is not None
-    if running:
-        message = "Unity host is running."
-    elif bundled:
-        message = "Unity host executable is bundled but not running."
+    listening = can_connect(timeout=0.05)
+    process_running = is_process_running()
+    engine_available = paths.executable is not None
+    if listening:
+        message = f"Unity host is listening on {HOST_TCP_HOST}:{HOST_TCP_PORT}."
+    elif process_running:
+        message = "Unity host process is running, waiting for TCP listener."
+    elif engine_available:
+        message = "Unity engine executable exists but is not running."
     elif paths.host_dir.exists():
         message = "Unity host folder exists, but no executable was found."
     else:
-        message = "Unity host is not bundled yet."
+        message = "Unity engine is not installed yet."
     return HostStatus(
-        bundled=bundled,
-        running=running,
+        engine_available=engine_available,
+        running=listening or process_running,
         host_dir=str(paths.host_dir),
         executable=str(paths.executable or ""),
         message=message,
     )
 
 
-def launch() -> HostStatus:
+def launch(wait_seconds: float = 10.0) -> HostStatus:
     global _process
-    if is_running():
+    if can_connect(timeout=0.1):
         return status()
 
-    paths = resolve_host_paths()
-    if paths.executable is None:
-        return status()
+    if not is_process_running():
+        paths = resolve_host_paths()
+        if paths.executable is None:
+            return status()
 
-    _process = subprocess.Popen(
-        [str(paths.executable)],
-        cwd=str(paths.executable.parent),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+        _process = subprocess.Popen(
+            [str(paths.executable)],
+            cwd=str(paths.executable.parent),
+        )
+
+    wait_until_ready(wait_seconds)
     return status()
 
 
@@ -110,18 +134,12 @@ def terminate() -> HostStatus:
     return status()
 
 
-def send(envelope: dict[str, Any]) -> None:
-    if not is_running() or _process is None or _process.stdin is None:
-        raise RuntimeError("Unity host is not running.")
-    write_frame(_process.stdin, envelope)
+def request(envelope: dict[str, Any], timeout: float = 10.0) -> dict[str, Any]:
+    with socket.create_connection((HOST_TCP_HOST, HOST_TCP_PORT), timeout=timeout) as client:
+        stream = client.makefile("rwb")
+        write_frame(stream, envelope)
+        return read_frame(stream)
 
 
-def receive() -> dict[str, Any]:
-    if not is_running() or _process is None or _process.stdout is None:
-        raise RuntimeError("Unity host is not running.")
-    return read_frame(_process.stdout)
-
-
-def request(envelope: dict[str, Any]) -> dict[str, Any]:
-    send(envelope)
-    return receive()
+def hello(timeout: float = 3.0) -> dict[str, Any]:
+    return request(make_envelope("Host", "hello", {}), timeout=timeout)

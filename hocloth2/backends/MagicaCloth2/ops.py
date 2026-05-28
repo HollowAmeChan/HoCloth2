@@ -205,7 +205,7 @@ class HOCLOTH2_MC2_OT_build(bpy.types.Operator):
             return {"CANCELLED"}
 
         request_message = _build_request_from_snapshot(envelope)
-        if host.is_running():
+        if host.can_connect():
             try:
                 response = host.request(request_message)
             except Exception as exc:
@@ -269,3 +269,4 @@ def register() -> None:
 def unregister() -> None:
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
+

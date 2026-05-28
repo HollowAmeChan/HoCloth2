@@ -1,0 +1,17 @@
+{
+  "host_name": "HoClothUnity",
+  "host_version": "0.1.0",
+  "unity_version": "6000.3.15f1",
+  "exchange_schema_version": 1,
+  "transport": {
+    "type": "tcp",
+    "host": "127.0.0.1",
+    "port": 39277
+  },
+  "available_backends": [
+    {
+      "backend": "MagicaCloth2",
+      "package": "com.magicasoft.magica-cloth2"
+    }
+  ]
+}

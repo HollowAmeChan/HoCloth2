@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import bpy
 
@@ -45,7 +45,14 @@ class HOCLOTH2_OT_host_status(bpy.types.Operator):
         del context
         current = host.status()
         detail = current.message
-        if current.executable:
+        if host.can_connect():
+            try:
+                hello = host.hello()
+                payload = hello.get("payload", {})
+                detail = f"{payload.get('host_name', 'Host')} {payload.get('host_version', '')}: {detail}"
+            except Exception as exc:
+                detail = f"{detail} hello failed: {exc}"
+        elif current.executable:
             detail = f"{detail} {current.executable}"
         self.report({"INFO"}, detail)
         return {"FINISHED"}
@@ -54,11 +61,11 @@ class HOCLOTH2_OT_host_status(bpy.types.Operator):
 class HOCLOTH2_OT_host_launch(bpy.types.Operator):
     bl_idname = "hocloth2.host_launch"
     bl_label = "Launch Host"
-    bl_description = "Launch the bundled Unity host"
+    bl_description = "Launch the Unity physics engine"
 
     def execute(self, context: bpy.types.Context):
         del context
-        current = host.launch()
+        current = host.launch(wait_seconds=10.0)
         report_type = {"INFO"} if current.running else {"WARNING"}
         detail = current.message
         if current.executable:
@@ -82,3 +89,4 @@ def register() -> None:
 def unregister() -> None:
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
+
