@@ -1,7 +1,8 @@
-﻿import json
+import json
 from pathlib import Path
 
 import bpy
+from mathutils import Matrix
 
 from ...common import host
 from ...common.exchange import make_envelope, write_messagepack_file
@@ -71,6 +72,128 @@ def _write_build_request_files(scene, authoring_snapshot: dict) -> tuple[Path, P
     )
 
 
+def _as_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _vec3(value) -> tuple[float, float, float]:
+    return (float(value[0]), float(value[1]), float(value[2]))
+
+
+def _quat(value) -> tuple[float, float, float, float]:
+    return (float(value.w), float(value.x), float(value.y), float(value.z))
+
+
+def _matrix(value) -> tuple[float, ...]:
+    return tuple(float(value[row][column]) for row in range(4) for column in range(4))
+
+
+def _matrix_from_row_major(values) -> Matrix | None:
+    if not isinstance(values, (list, tuple)) or len(values) != 16:
+        return None
+    try:
+        numbers = [float(value) for value in values]
+    except (TypeError, ValueError):
+        return None
+    return Matrix(
+        (
+            numbers[0:4],
+            numbers[4:8],
+            numbers[8:12],
+            numbers[12:16],
+        )
+    )
+
+
+def _scene_delta_time(scene) -> float:
+    fps_base = float(scene.render.fps_base) if scene.render.fps_base else 1.0
+    fps = float(scene.render.fps) / fps_base if scene.render.fps else 24.0
+    return 1.0 / fps if fps > 0.0 else 1.0 / 24.0
+
+
+def _store_build_response(scene, response: dict) -> tuple[int, str]:
+    payload = response.get("payload", {}) if isinstance(response, dict) else {}
+    handle = _as_int(payload.get("handle"), 0)
+    summary = str(payload.get("summary", ""))
+    if handle > 0:
+        scene.hocloth2_mc2_runtime_handle = handle
+        scene.hocloth2_mc2_step_index = 0
+    return handle, summary
+
+
+def _frame_inputs_from_snapshot(scene, authoring_snapshot: dict) -> dict:
+    snapshot_payload = authoring_snapshot.get("payload", {})
+    transforms: list[dict] = []
+    for chain in snapshot_payload.get("bone_chains", []):
+        armature_name = chain.get("armature_name", "")
+        armature_object = bpy.data.objects.get(armature_name)
+        if armature_object is None or armature_object.type != "ARMATURE" or armature_object.pose is None:
+            continue
+        component_id = chain.get("component_id", "")
+        for bone_data in chain.get("bones", []):
+            bone_name = bone_data.get("name", "")
+            pose_bone = armature_object.pose.bones.get(bone_name)
+            if pose_bone is None:
+                continue
+            world_matrix = armature_object.matrix_world @ pose_bone.matrix
+            transforms.append(
+                {
+                    "component_id": component_id,
+                    "armature_name": armature_name,
+                    "bone_name": bone_name,
+                    "world_matrix": _matrix(world_matrix),
+                    "world_translation": _vec3(world_matrix.to_translation()),
+                    "world_rotation": _quat(world_matrix.to_quaternion()),
+                    "world_scale": _vec3(world_matrix.to_scale()),
+                }
+            )
+
+    delta_time = _scene_delta_time(scene)
+    return {
+        "frame": int(scene.frame_current),
+        "time": float(scene.frame_current) * delta_time,
+        "delta_time": delta_time,
+        "bone_transforms": transforms,
+    }
+
+
+def _step_request_from_snapshot(scene, authoring_snapshot: dict) -> dict:
+    return make_envelope(
+        "MagicaCloth2",
+        "step_request",
+        {
+            "handle": int(scene.hocloth2_mc2_runtime_handle),
+            "frame_inputs": _frame_inputs_from_snapshot(scene, authoring_snapshot),
+        },
+    )
+
+
+def _apply_step_output(scene, response: dict) -> int:
+    payload = response.get("payload", {}) if isinstance(response, dict) else {}
+    applied = 0
+    for transform in payload.get("bone_transforms", []):
+        armature_name = transform.get("armature_name", "")
+        bone_name = transform.get("bone_name", "")
+        armature_object = bpy.data.objects.get(armature_name)
+        if armature_object is None or armature_object.type != "ARMATURE" or armature_object.pose is None:
+            continue
+        pose_bone = armature_object.pose.bones.get(bone_name)
+        if pose_bone is None:
+            continue
+        world_matrix = _matrix_from_row_major(transform.get("world_matrix"))
+        if world_matrix is None:
+            continue
+        pose_bone.matrix = armature_object.matrix_world.inverted_safe() @ world_matrix
+        applied += 1
+
+    if applied:
+        bpy.context.view_layer.update()
+    return applied
+
+
 class HOCLOTH2_MC2_OT_add_component(bpy.types.Operator):
     bl_idname = "hocloth2.mc2_add_component"
     bl_label = "Add MC2 Component"
@@ -100,6 +223,8 @@ class HOCLOTH2_MC2_OT_add_component(bpy.types.Operator):
             component.root_bone_name = extracted.root_bone_name
             component.bone_count = len(extracted.bone_names)
             component.status = f"Authoring chain ready: {component.bone_count} bones"
+            scene.hocloth2_mc2_runtime_handle = 0
+            scene.hocloth2_mc2_step_index = 0
             scene.hocloth2_mc2_status = f"Added {display_name}"
             return {"FINISHED"}
 
@@ -112,6 +237,8 @@ class HOCLOTH2_MC2_OT_add_component(bpy.types.Operator):
         component = props.create_component(scene, component_type, display_name)
         component.source_object = active_object
         component.status = "Collider authoring ready"
+        scene.hocloth2_mc2_runtime_handle = 0
+        scene.hocloth2_mc2_step_index = 0
         scene.hocloth2_mc2_status = f"Added {display_name}"
         return {"FINISHED"}
 
@@ -131,6 +258,8 @@ class HOCLOTH2_MC2_OT_remove_component(bpy.types.Operator):
         removed_name = components[index].display_name or components[index].name
         components.remove(index)
         scene.hocloth2_mc2_component_index = max(0, min(index, len(components) - 1))
+        scene.hocloth2_mc2_runtime_handle = 0
+        scene.hocloth2_mc2_step_index = 0
         scene.hocloth2_mc2_status = f"Removed {removed_name}"
         return {"FINISHED"}
 
@@ -160,6 +289,8 @@ class HOCLOTH2_MC2_OT_refresh_component(bpy.types.Operator):
         component.root_bone_name = extracted.root_bone_name
         component.bone_count = len(extracted.bone_names)
         component.status = f"Refreshed chain: {component.bone_count} bones"
+        scene.hocloth2_mc2_runtime_handle = 0
+        scene.hocloth2_mc2_step_index = 0
         scene.hocloth2_mc2_status = component.status
         return {"FINISHED"}
 
@@ -212,9 +343,15 @@ class HOCLOTH2_MC2_OT_build(bpy.types.Operator):
                 scene.hocloth2_mc2_status = f"Build send failed: {exc}"
                 self.report({"ERROR"}, scene.hocloth2_mc2_status)
                 return {"CANCELLED"}
-            scene.hocloth2_mc2_status = f"Build response: {response.get('payload_type', 'unknown')}"
+            if response.get("payload_type") != "build_output" or not response.get("payload", {}).get("ok", False):
+                scene.hocloth2_mc2_status = f"Build failed: {response.get('payload_type', 'unknown')}"
+                self.report({"ERROR"}, scene.hocloth2_mc2_status)
+                return {"CANCELLED"}
+            handle, summary = _store_build_response(scene, response)
+            scene.hocloth2_mc2_status = f"Build #{handle}: {summary or response.get('payload_type', 'ok')}"
             return {"FINISHED"}
 
+        scene.hocloth2_mc2_runtime_handle = 0
         scene.hocloth2_mc2_status = (
             "Build request ready: "
             f"{len(bone_chains)} chains, {collider_count} colliders, {bone_count} bones"
@@ -229,8 +366,43 @@ class HOCLOTH2_MC2_OT_step(bpy.types.Operator):
     bl_description = "Step the Magica Cloth 2 runtime once"
 
     def execute(self, context):
-        context.scene.hocloth2_mc2_status = "Step placeholder: Unity bridge is not implemented yet"
-        self.report({"INFO"}, context.scene.hocloth2_mc2_status)
+        scene = context.scene
+        if not host.can_connect():
+            scene.hocloth2_mc2_status = "Step blocked: Unity engine is not running"
+            self.report({"ERROR"}, scene.hocloth2_mc2_status)
+            return {"CANCELLED"}
+        if scene.hocloth2_mc2_runtime_handle <= 0:
+            scene.hocloth2_mc2_status = "Step blocked: build runtime first"
+            self.report({"ERROR"}, scene.hocloth2_mc2_status)
+            return {"CANCELLED"}
+
+        authoring_snapshot = snapshot.build_authoring_snapshot(scene)
+        request_message = _step_request_from_snapshot(scene, authoring_snapshot)
+        bone_count = len(request_message["payload"]["frame_inputs"].get("bone_transforms", []))
+        if bone_count <= 0:
+            scene.hocloth2_mc2_status = "Step blocked: no bone transforms to send"
+            self.report({"ERROR"}, scene.hocloth2_mc2_status)
+            return {"CANCELLED"}
+
+        try:
+            response = host.request(request_message)
+        except Exception as exc:
+            scene.hocloth2_mc2_status = f"Step send failed: {exc}"
+            self.report({"ERROR"}, scene.hocloth2_mc2_status)
+            return {"CANCELLED"}
+
+        payload = response.get("payload", {})
+        if response.get("payload_type") != "step_output" or not payload.get("ok", False):
+            scene.hocloth2_mc2_status = f"Step failed: {payload.get('message', response.get('payload_type', 'unknown'))}"
+            self.report({"ERROR"}, scene.hocloth2_mc2_status)
+            return {"CANCELLED"}
+
+        applied = _apply_step_output(scene, response)
+        scene.hocloth2_mc2_step_index = _as_int(payload.get("step_index"), scene.hocloth2_mc2_step_index + 1)
+        scene.hocloth2_mc2_status = (
+            f"Step #{scene.hocloth2_mc2_step_index}: sent {bone_count} bones, "
+            f"applied {applied} transforms"
+        )
         return {"FINISHED"}
 
 
@@ -243,7 +415,7 @@ class HOCLOTH2_MC2_OT_toggle_live(bpy.types.Operator):
         scene = context.scene
         scene.hocloth2_mc2_live_running = not scene.hocloth2_mc2_live_running
         scene.hocloth2_mc2_status = (
-            "Live placeholder: waiting for Unity bridge"
+            "Live placeholder: manual Step is wired"
             if scene.hocloth2_mc2_live_running
             else "Live stopped"
         )
@@ -269,4 +441,3 @@ def register() -> None:
 def unregister() -> None:
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
-

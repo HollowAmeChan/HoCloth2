@@ -85,6 +85,54 @@ colliderCollisionConstraint
 
 第一版暂时不做 mesh 解算，mesh/bake 后续走 Alembic 中转。
 
+
+## MC2 runtime step
+
+`build_request` 成功后，Unity 返回：
+
+```text
+payload.handle: int
+payload.received_chain_count: int
+payload.received_bone_count: int
+payload.received_collider_count: int
+```
+
+Blender 后续用 `handle` 发送 `step_request`：
+
+```text
+payload.handle: int
+payload.frame_inputs.frame: int
+payload.frame_inputs.time: float
+payload.frame_inputs.delta_time: float
+payload.frame_inputs.bone_transforms[]:
+  component_id: string
+  armature_name: string
+  bone_name: string
+  world_matrix: float[16] row-major
+  world_translation: float[3]
+  world_rotation: float[4] wxyz
+  world_scale: float[3]
+```
+
+Unity 返回 `step_output`：
+
+```text
+payload.ok: bool
+payload.handle: int
+payload.step_index: int
+payload.received_bone_count: int
+payload.solved_bone_count: int
+payload.bone_transforms[]:
+  component_id: string
+  armature_name: string
+  bone_name: string
+  parent_index: int
+  world_matrix: float[16] row-major
+```
+
+当前第一版 `step_output` 先做 transform 回显，目的是验证 Blender -> Unity -> Blender 的运行时数据闭环。后续再把 Unity 内部的 MC2 实解结果替换进 `bone_transforms[]`。
+
 ## 其他 backend
 
 VRM SpringBone、DynamicBone、PhysBone 后续各自定义自己的 payload。它们不需要伪装成 MC2，也不需要适配一个通用 component。
+

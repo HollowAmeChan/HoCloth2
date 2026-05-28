@@ -1,4 +1,4 @@
-﻿import bpy
+import bpy
 
 from . import props
 
@@ -128,6 +128,8 @@ def draw_panel(context: bpy.types.Context, layout: bpy.types.UILayout) -> None:
         icon="PAUSE" if scene.hocloth2_mc2_live_running else "PLAY",
     )
     runtime.operator("hocloth2.mc2_export_snapshot", text="Snapshot", icon="FILE_CACHE")
+    if scene.hocloth2_mc2_runtime_handle:
+        runtime.label(text=f"Runtime handle: {scene.hocloth2_mc2_runtime_handle} / step {scene.hocloth2_mc2_step_index}", icon="LINKED")
     if scene.hocloth2_mc2_last_snapshot_path:
         runtime.label(text=_short_path(scene.hocloth2_mc2_last_snapshot_path), icon="FILE_CACHE")
     if scene.hocloth2_mc2_last_debug_json_path:
