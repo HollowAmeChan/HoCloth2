@@ -33,7 +33,7 @@ hocloth2/
 
 - addon 路径定位。
 - 简单日志。
-- JSON/envelope 小工具。
+- MessagePack/envelope 小工具。
 - Unity host 启动/连接的基础 helper。
 - 坐标/矩阵的最小通用函数。
 

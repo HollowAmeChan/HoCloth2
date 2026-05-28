@@ -12,6 +12,12 @@ _COMPONENT_ICONS = {
 }
 
 
+def _short_path(path: str) -> str:
+    if not path:
+        return ""
+    return path if len(path) <= 56 else "..." + path[-53:]
+
+
 class HOCLOTH2_MC2_UL_components(bpy.types.UIList):
     bl_idname = "HOCLOTH2_MC2_UL_components"
 
@@ -121,9 +127,11 @@ def draw_panel(context: bpy.types.Context, layout: bpy.types.UILayout) -> None:
         text="Pause" if scene.hocloth2_mc2_live_running else "Live",
         icon="PAUSE" if scene.hocloth2_mc2_live_running else "PLAY",
     )
-    runtime.operator("hocloth2.mc2_export_snapshot", text="Snapshot", icon="TEXT")
-    if scene.hocloth2_mc2_last_snapshot_text_name:
-        runtime.label(text=scene.hocloth2_mc2_last_snapshot_text_name, icon="TEXT")
+    runtime.operator("hocloth2.mc2_export_snapshot", text="Snapshot", icon="FILE_CACHE")
+    if scene.hocloth2_mc2_last_snapshot_path:
+        runtime.label(text=_short_path(scene.hocloth2_mc2_last_snapshot_path), icon="FILE_CACHE")
+    if scene.hocloth2_mc2_last_debug_json_path:
+        runtime.label(text=_short_path(scene.hocloth2_mc2_last_debug_json_path), icon="TEXT")
     runtime.label(text=scene.hocloth2_mc2_status or "Idle", icon="INFO")
 
 

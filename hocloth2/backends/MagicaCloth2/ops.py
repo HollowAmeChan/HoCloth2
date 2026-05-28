@@ -1,7 +1,10 @@
 ﻿import json
+from pathlib import Path
 
 import bpy
 
+from ...common import host
+from ...common.exchange import make_envelope, write_messagepack_file
 from . import props, snapshot
 from .extract import extract_active_bone_chain
 
@@ -14,21 +17,58 @@ _COMPONENT_LABELS = {
     "PLANE_COLLIDER": "MagicaCloth2 Plane Collider",
 }
 
-SNAPSHOT_TEXT_NAME = "HoCloth2_MC2_AuthoringSnapshot.json"
+SNAPSHOT_FILE_NAME = "HoCloth2_MC2_AuthoringSnapshot.msgpack"
+DEBUG_JSON_FILE_NAME = "HoCloth2_MC2_AuthoringSnapshot.debug.json"
+BUILD_REQUEST_FILE_NAME = "HoCloth2_MC2_BuildRequest.msgpack"
+BUILD_REQUEST_DEBUG_JSON_FILE_NAME = "HoCloth2_MC2_BuildRequest.debug.json"
 
 
 def _active_component(scene):
     return props.get_active_component(scene)
 
 
-def _write_snapshot_text(scene, envelope: dict) -> str:
-    text = bpy.data.texts.get(SNAPSHOT_TEXT_NAME)
-    if text is None:
-        text = bpy.data.texts.new(SNAPSHOT_TEXT_NAME)
-    text.clear()
-    text.write(json.dumps(envelope, ensure_ascii=False, indent=2))
-    scene.hocloth2_mc2_last_snapshot_text_name = text.name
-    return text.name
+def _snapshot_dir() -> Path:
+    blend_path = Path(bpy.data.filepath) if bpy.data.filepath else None
+    if blend_path is not None and blend_path.parent.exists():
+        path = blend_path.parent / ".hocloth2"
+    else:
+        path = Path(bpy.app.tempdir) / "HoCloth2"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _write_debug_pair(scene, message: dict, msgpack_name: str, debug_json_name: str) -> tuple[Path, Path]:
+    path = _snapshot_dir()
+    msgpack_path = path / msgpack_name
+    debug_json_path = path / debug_json_name
+    write_messagepack_file(msgpack_path, message)
+    debug_json_path.write_text(json.dumps(message, ensure_ascii=False, indent=2), encoding="utf-8")
+    scene.hocloth2_mc2_last_snapshot_path = str(msgpack_path)
+    scene.hocloth2_mc2_last_debug_json_path = str(debug_json_path)
+    return msgpack_path, debug_json_path
+
+
+def _write_snapshot_files(scene, envelope: dict) -> tuple[Path, Path]:
+    return _write_debug_pair(scene, envelope, SNAPSHOT_FILE_NAME, DEBUG_JSON_FILE_NAME)
+
+
+def _build_request_from_snapshot(authoring_snapshot: dict) -> dict:
+    return make_envelope(
+        "MagicaCloth2",
+        "build_request",
+        {
+            "authoring_snapshot": authoring_snapshot,
+        },
+    )
+
+
+def _write_build_request_files(scene, authoring_snapshot: dict) -> tuple[Path, Path]:
+    return _write_debug_pair(
+        scene,
+        _build_request_from_snapshot(authoring_snapshot),
+        BUILD_REQUEST_FILE_NAME,
+        BUILD_REQUEST_DEBUG_JSON_FILE_NAME,
+    )
 
 
 class HOCLOTH2_MC2_OT_add_component(bpy.types.Operator):
@@ -127,17 +167,17 @@ class HOCLOTH2_MC2_OT_refresh_component(bpy.types.Operator):
 class HOCLOTH2_MC2_OT_export_snapshot(bpy.types.Operator):
     bl_idname = "hocloth2.mc2_export_snapshot"
     bl_label = "Export MC2 Snapshot"
-    bl_description = "Write the current Magica Cloth 2 authoring snapshot to a Blender text datablock"
+    bl_description = "Write the current Magica Cloth 2 authoring snapshot as MessagePack plus debug JSON"
 
     def execute(self, context):
         envelope = snapshot.build_authoring_snapshot(context.scene)
         payload = envelope.get("payload", {})
-        text_name = _write_snapshot_text(context.scene, envelope)
+        msgpack_path, _debug_json_path = _write_snapshot_files(context.scene, envelope)
         context.scene.hocloth2_mc2_status = (
             f"Snapshot exported: {len(payload.get('bone_chains', []))} chains, "
             f"{len(payload.get('colliders', []))} colliders"
         )
-        self.report({"INFO"}, f"Wrote {text_name}")
+        self.report({"INFO"}, f"Wrote {msgpack_path}")
         return {"FINISHED"}
 
 
@@ -153,7 +193,7 @@ class HOCLOTH2_MC2_OT_build(bpy.types.Operator):
         bone_chains = payload.get("bone_chains", [])
         collider_count = len(payload.get("colliders", []))
         bone_count = sum(len(chain.get("bones", [])) for chain in bone_chains)
-        _write_snapshot_text(scene, envelope)
+        request_path, _debug_json_path = _write_build_request_files(scene, envelope)
 
         if not bone_chains:
             scene.hocloth2_mc2_status = "Build blocked: no enabled BoneCloth/BoneSpring component"
@@ -164,11 +204,22 @@ class HOCLOTH2_MC2_OT_build(bpy.types.Operator):
             self.report({"ERROR"}, scene.hocloth2_mc2_status)
             return {"CANCELLED"}
 
+        request_message = _build_request_from_snapshot(envelope)
+        if host.is_running():
+            try:
+                response = host.request(request_message)
+            except Exception as exc:
+                scene.hocloth2_mc2_status = f"Build send failed: {exc}"
+                self.report({"ERROR"}, scene.hocloth2_mc2_status)
+                return {"CANCELLED"}
+            scene.hocloth2_mc2_status = f"Build response: {response.get('payload_type', 'unknown')}"
+            return {"FINISHED"}
+
         scene.hocloth2_mc2_status = (
-            "Build placeholder snapshot ready: "
+            "Build request ready: "
             f"{len(bone_chains)} chains, {collider_count} colliders, {bone_count} bones"
         )
-        self.report({"INFO"}, "MC2 Unity bridge is not implemented yet.")
+        self.report({"INFO"}, f"Wrote {request_path}; Unity bridge is not running yet.")
         return {"FINISHED"}
 
 

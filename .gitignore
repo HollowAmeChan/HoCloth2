@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+!_Lib/**/*.pyd
 *.log
 .DS_Store
 Thumbs.db
@@ -11,6 +12,10 @@ Thumbs.db
 *.blend1
 *.blend2
 *.blend@
+
+# HoCloth2 调试/运行时输出
+*.msgpack
+*.debug.json
 
 # 本地运行时输出
 _bin/

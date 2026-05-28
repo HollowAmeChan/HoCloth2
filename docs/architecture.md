@@ -63,7 +63,7 @@ hocloth2/backends/VRM/
   apply.py
 ```
 
-它可以和 MC2 共享 `common` 里的 JSON、路径、启动 Unity host helper，但不共享 component schema。
+它可以和 MC2 共享 `common` 里的 MessagePack envelope、路径、启动 Unity host helper，但不共享 component schema。
 
 ## 统一的最小内容
 
@@ -71,7 +71,7 @@ hocloth2/backends/VRM/
 
 - 插件根目录定位。
 - Unity host 路径查找和启动。
-- 基础 JSON envelope。
+- 基础 MessagePack envelope。
 - 版本检查。
 - 日志。
 - 打包流程。

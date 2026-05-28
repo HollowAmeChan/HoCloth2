@@ -1,7 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import bpy
 
+from . import host
 from .backend_registry import iter_backend_panels
 
 
@@ -15,11 +16,13 @@ class HOCLOTH2_PT_main_panel(bpy.types.Panel):
     def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
 
+        host_status = host.status()
         top = layout.box()
         top.label(text="Unity Physics Host", icon="MOD_PHYSICS")
         row = top.row(align=True)
         row.operator("hocloth2.host_status", text="Status", icon="INFO")
         row.operator("hocloth2.host_launch", text="Launch", icon="PLAY")
+        top.label(text=host_status.message, icon="CHECKMARK" if host_status.running else "INFO")
 
         panels = iter_backend_panels()
         if not panels:
@@ -39,7 +42,12 @@ class HOCLOTH2_OT_host_status(bpy.types.Operator):
     bl_description = "Show the current Unity host status"
 
     def execute(self, context: bpy.types.Context):
-        self.report({"INFO"}, "Unity host bridge is not implemented yet.")
+        del context
+        current = host.status()
+        detail = current.message
+        if current.executable:
+            detail = f"{detail} {current.executable}"
+        self.report({"INFO"}, detail)
         return {"FINISHED"}
 
 
@@ -49,7 +57,13 @@ class HOCLOTH2_OT_host_launch(bpy.types.Operator):
     bl_description = "Launch the bundled Unity host"
 
     def execute(self, context: bpy.types.Context):
-        self.report({"INFO"}, "Unity host launcher is not implemented yet.")
+        del context
+        current = host.launch()
+        report_type = {"INFO"} if current.running else {"WARNING"}
+        detail = current.message
+        if current.executable:
+            detail = f"{detail} {current.executable}"
+        self.report(report_type, detail)
         return {"FINISHED"}
 
 

@@ -14,7 +14,6 @@ COMPONENT_TYPE_ITEMS = (
 BONE_COMPONENT_TYPES = {"BONE_CLOTH", "BONE_SPRING"}
 COLLIDER_COMPONENT_TYPES = {"SPHERE_COLLIDER", "CAPSULE_COLLIDER", "PLANE_COLLIDER"}
 
-
 CONNECTION_MODE_ITEMS = (
     ("Automatic", "Automatic", "Use MC2 automatic bone connection"),
     ("Line", "Line", "Use line connection"),
@@ -86,15 +85,20 @@ def register() -> None:
     )
     bpy.types.Scene.hocloth2_mc2_status = bpy.props.StringProperty(name="MC2 Status", default="Idle")
     bpy.types.Scene.hocloth2_mc2_live_running = bpy.props.BoolProperty(name="MC2 Live", default=False)
-    bpy.types.Scene.hocloth2_mc2_last_snapshot_text_name = bpy.props.StringProperty(
-        name="Last Snapshot Text",
+    bpy.types.Scene.hocloth2_mc2_last_snapshot_path = bpy.props.StringProperty(
+        name="Last Snapshot Path",
+        default="",
+    )
+    bpy.types.Scene.hocloth2_mc2_last_debug_json_path = bpy.props.StringProperty(
+        name="Last Debug JSON Path",
         default="",
     )
 
 
 def unregister() -> None:
     for attr_name in (
-        "hocloth2_mc2_last_snapshot_text_name",
+        "hocloth2_mc2_last_debug_json_path",
+        "hocloth2_mc2_last_snapshot_path",
         "hocloth2_mc2_live_running",
         "hocloth2_mc2_status",
         "hocloth2_mc2_component_index",
