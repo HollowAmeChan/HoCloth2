@@ -1,0 +1,23 @@
+﻿# 忽略生成文件和本地文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
+Thumbs.db
+
+# Blender 自动备份和临时文件
+*.blend1
+*.blend2
+*.blend@
+
+# 本地运行时输出
+_bin/
+_dist/
+_build/
+.cache/
+
+# IDE
+.vscode/
+.idea/
