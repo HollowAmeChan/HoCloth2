@@ -139,11 +139,23 @@ def _frame_inputs_from_snapshot(scene, authoring_snapshot: dict) -> dict:
             if pose_bone is None:
                 continue
             world_matrix = armature_object.matrix_world @ pose_bone.matrix
+            parent_name = bone_data.get("parent_name", "")
+            parent_pose_bone = armature_object.pose.bones.get(parent_name) if parent_name else None
+            if parent_pose_bone is not None:
+                parent_world_matrix = armature_object.matrix_world @ parent_pose_bone.matrix
+                parent_local_matrix = parent_world_matrix.inverted_safe() @ world_matrix
+            else:
+                parent_local_matrix = armature_object.matrix_world.inverted_safe() @ world_matrix
             transforms.append(
                 {
                     "component_id": component_id,
                     "armature_name": armature_name,
                     "bone_name": bone_name,
+                    "pose_world_matrix_b": _matrix(world_matrix),
+                    "pose_parent_local_matrix_b": _matrix(parent_local_matrix),
+                    "pose_world_translation_b": _vec3(world_matrix.to_translation()),
+                    "pose_world_rotation_b": _quat(world_matrix.to_quaternion()),
+                    "pose_world_scale_b": _vec3(world_matrix.to_scale()),
                     "world_matrix": _matrix(world_matrix),
                     "world_translation": _vec3(world_matrix.to_translation()),
                     "world_rotation": _quat(world_matrix.to_quaternion()),
@@ -183,7 +195,7 @@ def _apply_step_output(scene, response: dict) -> int:
         pose_bone = armature_object.pose.bones.get(bone_name)
         if pose_bone is None:
             continue
-        world_matrix = _matrix_from_row_major(transform.get("world_matrix"))
+        world_matrix = _matrix_from_row_major(transform.get("output_world_matrix_b") or transform.get("world_matrix"))
         if world_matrix is None:
             continue
         pose_bone.matrix = armature_object.matrix_world.inverted_safe() @ world_matrix

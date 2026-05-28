@@ -1,4 +1,4 @@
-﻿# 数据交换契约
+# 数据交换契约
 
 HoCloth2 的正式协议使用 MessagePack。JSON 只作为 debug mirror 输出，不作为运行时契约。
 
@@ -40,6 +40,7 @@ payload: map
 - Unity host 收到消息后按 `backend` 分发给对应 adapter。
 - 大数组优先用 MessagePack `bin` 承载二进制 buffer，而不是膨胀成 JSON 风格 float array。
 - mesh/bake 仍然优先 Alembic，不进入主通信帧。
+- 骨骼 Transform 不能按普通 Unity Transform 理解，必须遵守 `bone_transform_contract.md`。
 
 ## Debug JSON
 
@@ -108,11 +109,14 @@ payload.frame_inputs.bone_transforms[]:
   component_id: string
   armature_name: string
   bone_name: string
-  world_matrix: float[16] row-major
-  world_translation: float[3]
-  world_rotation: float[4] wxyz
-  world_scale: float[3]
+  pose_world_matrix_b: float[16] row-major
+  pose_parent_local_matrix_b: float[16] row-major
+  pose_world_translation_b: float[3]
+  pose_world_rotation_b: float[4] wxyz
+  pose_world_scale_b: float[3]
 ```
+
+兼容字段 `world_matrix/world_translation/world_rotation/world_scale` 暂时仍会输出，它们等同于对应的 Blender 空间 `*_b` 字段，只用于旧代码和 debug。Unity 侧不能把这些字段直接当作 Unity Transform。
 
 Unity 返回 `step_output`：
 
@@ -127,10 +131,15 @@ payload.bone_transforms[]:
   armature_name: string
   bone_name: string
   parent_index: int
-  world_matrix: float[16] row-major
+  output_world_matrix_b: float[16] row-major
+  output_world_translation_b: float[3]
+  output_world_rotation_b: float[4] wxyz
+  write_mode: string
 ```
 
-当前第一版 `step_output` 先做 transform 回显，目的是验证 Blender -> Unity -> Blender 的运行时数据闭环。后续再把 Unity 内部的 MC2 实解结果替换进 `bone_transforms[]`。
+兼容字段 `world_matrix/world_translation/world_rotation/world_scale` 暂时仍会返回，它们等同于对应的 Blender 空间输出。
+
+当前第一版 `step_output` 先允许 debug 写回，目的是验证 Blender -> Unity -> Blender 的运行时数据闭环。真正接入 MC2 时必须遵守 `bone_transform_contract.md` 中的 solver 空间转换和写回策略。
 
 ## 其他 backend
 
